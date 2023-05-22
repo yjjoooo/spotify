@@ -15,7 +15,6 @@ import os
 import config
 import json
 import requests
-import pandas as pd
 import base64
 import time
 
@@ -50,33 +49,49 @@ def main():
     try:
         pym.script_start()
 
+        # 스포티파이 client 정보 세팅
         client_id = config.spotify_client_id
         client_secret = config.spotify_client_secret
         
-        artist_list = pym.read_file_list(os.path.join(script_abs_path, 'data', '01_artists'))
+        # artist 목록 조회
+        artist_list = pym.read_file_list(os.path.join(script_abs_path, '..', 'data', '01_artists'))
         artist_list = list(map(lambda x : os.path.splitext(os.path.split(x)[-1])[0], artist_list))
         
         for artist_id in artist_list:
-            hot_tracks = collect_artist_hot_track(client_id, client_secret, artist_id, 'KR')
-            
-            for track in hot_tracks['tracks']:
-                track_id = track['id']
-                track_name = track['name']
+            try:
+                # artist hot track 호출
+                hot_tracks = collect_artist_hot_track(client_id, client_secret, artist_id, 'KR')
                 
-                logging.info('######## Save Track {} / {}'.format(track_id, track_name))
-                with open(os.path.join(script_abs_path, 'data', '02_tracks', '{}.json'.format(track_id)), 'w') as file:
-                    json.dump(track, file, indent = 4)
-            
-                response = collect_audio_features(client_id, client_secret, track_id, 'KR')
-                
-                logging.info('######## Save Audio Features {} / {}'.format(track_id, track_name))
-                with open(os.path.join(script_abs_path, 'data', '03_audio_features', '{}.json'.format(track_id)), 'w') as file:
-                    json.dump(response, file, indent = 4)                
+                for track in hot_tracks['tracks']:
+                    track_id = track['id']
+                    track_name = track['name']
+                    
+                    try:
+                        # 저장
+                        logging.info('######## Save Track {} / {}'.format(track_id, track_name))
+                        with open(os.path.join(script_abs_path, '..', 'data', '04_tracks', '{}.json'.format(track_id)), 'w') as file:
+                            json.dump(track, file, indent = 4)
+                    except:
+                        logging.error('######## Save Track Error {} / {}'.format(track_id, track_name))
+                    
+                    try:
+                        # audio feature 호출
+                        response = collect_audio_features(client_id, client_secret, track_id, 'KR')
+                        
+                        # 저장
+                        logging.info('######## Save Audio Features {} / {}'.format(track_id, track_name))
+                        with open(os.path.join(script_abs_path, '..', 'data', '05_audio_features', '{}.json'.format(track_id)), 'w') as file:
+                            json.dump(response, file, indent = 4)
+                    except:
+                        logging.error('######## Save Audio Features Error {} / {}'.format(track_id, track_name))
+            except:
+                pass
     except:
         logging.error('############ Main Funtion Error')
         logging.error(traceback.format_exc())
     
 ''' functions '''
+# 스포티파이 API 인증
 def get_headers(client_id, client_secret):
     try:
         b64 = base64.b64encode('{}:{}'.format(client_id, client_secret).encode('UTF-8')).decode('ascii')
@@ -104,6 +119,7 @@ def get_headers(client_id, client_secret):
         logging.error(traceback.format_exc())
         return get_headers(client_id, client_secret)
 
+# artist hot track API 호출
 def collect_artist_hot_track(client_id, client_secret, artist_id, market):
     try:
         headers = get_headers(client_id, client_secret)
@@ -127,7 +143,6 @@ def collect_artist_hot_track(client_id, client_secret, artist_id, market):
             return collect_artist_hot_track(client_id, client_secret, artist_id, market)
         else:
             logging.error('############ Collect Artist Hot Track API Error {} / {} / {}'.format(response.status_code, artist_id, market))
-            return collect_artist_hot_track(client_id, client_secret, artist_id, market)
     except Warning as w:
         logging.warning(w)
     except:
@@ -135,6 +150,7 @@ def collect_artist_hot_track(client_id, client_secret, artist_id, market):
         logging.error(traceback.format_exc())
         return collect_artist_hot_track(client_id, client_secret, artist_id, market)
 
+# artist audio features API 호출
 def collect_audio_features(client_id, client_secret, track_id, market):
     try:
         headers = get_headers(client_id, client_secret)
@@ -157,7 +173,6 @@ def collect_audio_features(client_id, client_secret, track_id, market):
             return collect_audio_features(client_id, client_secret, track_id, market)
         else:
             logging.error('#### Collect Audio Features API Error {} / {} / {}'.format(response.status_code, track_id, market))
-            return collect_audio_features(client_id, client_secret, track_id, market)
     except Warning as w:
         logging.warning(w)
     except:

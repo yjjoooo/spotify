@@ -50,37 +50,50 @@ def main():
     try:
         pym.script_start()
 
+        # 스포티파이 client 정보 세팅
         client_id = config.spotify_client_id
         client_secret = config.spotify_client_secret
-                
-        artist_df = pd.read_csv(os.path.join(script_abs_path, 'data', 'artists.csv'))
+        
+        # kaggle artist name 데이터 세팅
+        artist_df = pd.read_csv(os.path.join(script_abs_path, '..', 'data', 'artists.csv'))
         artist_df['artist_lastfm'] = artist_df['artist_lastfm'].fillna('etc')
         artist_df['country_mb'] = artist_df['country_mb'].fillna('etc')
         
+        # 한국 artist 세팅
         artist_df_korean = artist_df[artist_df['country_mb'] == 'South Korea'].reset_index(drop = True)
         
+        # 국가 필터링
         artist_df2 = artist_df['country_mb'].value_counts().reset_index()
         
         artist_df3 = artist_df[artist_df['country_mb'].isin(list(artist_df2[artist_df2['country_mb'] > 5000]['index']))][artist_df['listeners_lastfm'] > 0][artist_df['scrobbles_lastfm'] > 0]
         artist_df3 = artist_df3.drop_duplicates(subset = ['artist_lastfm']).reset_index(drop = True)
         
+        # 인기도 상위 15000 대상
         artist_df4 = artist_df3.loc[:15000, :]
         
+        # 인기도 상위 15000 + 한국
         artist_df5 = pd.concat([artist_df4, artist_df_korean], axis = 0).drop_duplicates().reset_index(drop = True)
         
         artist_df5['artist_lastfm'] = artist_df5.apply(lambda x : x['artist_mb'] if x['artist_lastfm'] == 'etc' else x['artist_lastfm'] , axis = 1)
         
-        save_path = os.path.join(script_abs_path, 'data', '01_artists')
-            
+        save_path = os.path.join(os.path.split(script_abs_path)[0], 'data', '01_artists')
+        
+        # 이름별 artist search 
         for artist_name in list(artist_df5['artist_lastfm']):
-            response = search(client_id, client_secret, artist_name, 'artist', 'KR', 50, 0)
-            
-            save_artist(response, artist_name, save_path)
+            try:
+                # 첫번째 offset만 조회
+                response = search(client_id, client_secret, artist_name, 'artist', 'KR', 50, 0)
+                
+                # 저장
+                save_artist(response, artist_name, save_path)
+            except:
+                pass
     except:
         logging.error('############ Main Funtion Error')
         logging.error(traceback.format_exc())
     
 ''' functions '''
+# 스포티파이 API 인증
 def get_headers(client_id, client_secret):
     try:
         b64 = base64.b64encode('{}:{}'.format(client_id, client_secret).encode('UTF-8')).decode('ascii')
@@ -107,7 +120,8 @@ def get_headers(client_id, client_secret):
         logging.error('############ Get Headers Error')
         logging.error(traceback.format_exc())
         return get_headers(client_id, client_secret)
-    
+
+# artist search API 호출
 def search(client_id, client_secret, query, search_type, market, limit, offset):
     try:
         headers = get_headers(client_id, client_secret)
@@ -142,6 +156,7 @@ def search(client_id, client_secret, query, search_type, market, limit, offset):
         logging.error(traceback.format_exc())
         return search(client_id, client_secret, query, search_type, market, limit, offset)
 
+# artist 데이터 저장
 def save_artist(response, artist_name, save_path):
     try:
         artist_list = response['artists']['items']
